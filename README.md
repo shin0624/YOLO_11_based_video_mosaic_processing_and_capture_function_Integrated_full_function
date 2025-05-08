@@ -1,3 +1,14 @@
+title: YOLO_11_based_video_mosaic_processing_and_capture_function_Integrated_full_function
+emoji: 🌖
+colorFrom: yellow
+colorTo: pink
+sdk: gradio
+sdk_version: 5.29.0
+app_file: app.py
+pinned: false
+license: mit
+short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이크 및 프레임 단위 이미지 캡쳐 기능 구현
+
 # YOLO_11_based_video_mosaic_processing_and_capture_function_Integrated_full_function
 ## shin0624 내 Space 기능 모두 통합
 **YOLO 11** 모델 기반 동영상 내 사람 형상 모자이크 및 프레임 단위 이미지 캡쳐 기능 구현
