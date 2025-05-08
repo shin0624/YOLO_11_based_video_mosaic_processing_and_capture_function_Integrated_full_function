@@ -36,7 +36,8 @@ def process_video(
     target_resolution=70,
     compression_level=3
 ):
-    # 비디오 파일 경로 설정
+    video_path = None
+    # Google Drive에서 다운로드
     if drive_link:
         video_path = os.path.join(temp_dir, 'input.mp4')
         try:
@@ -45,16 +46,18 @@ def process_video(
             gdown.download(direct_url, video_path, quiet=False)
         except Exception as e:
             raise RuntimeError("Google Drive 링크 형식이 잘못되었습니다.") from e
+    # 로컬에서 업로드한 파일 사용
     elif video_source:
-        video_path = video_source  # ✅ 수정: 업로드된 비디오 파일 경로
+        video_path = video_source
     else:
         raise RuntimeError("업로드된 동영상이나 Google Drive 링크 중 하나가 필요합니다.")
-        
-        # 비디오 캡처
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise RuntimeError("비디오를 열 수 없습니다.")
-
+    
+    # 영상 열기
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise RuntimeError("비디오 파일을 열 수 없습니다.")
+    
+    # 프레임 수 얻기
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
