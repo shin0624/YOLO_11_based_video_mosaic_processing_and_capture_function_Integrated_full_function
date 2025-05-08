@@ -13,7 +13,7 @@ import gdown
 import time
 from tqdm import tqdm
 
-model = YOLO('yolov11n.pt')
+model = YOLO('yolo11n.pt')
 temp_dir = tempfile.mkdtemp()
 
 def apply_mosaic(frame, x, y, w, h, mosaic_size=15):
