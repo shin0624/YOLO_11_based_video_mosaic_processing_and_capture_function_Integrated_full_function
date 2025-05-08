@@ -46,14 +46,14 @@ def process_video(
         except Exception as e:
             raise RuntimeError("Google Drive 링크 형식이 잘못되었습니다.") from e
     elif video_source:
-        video_path = video_source.name  # 업로드된 비디오 파일 경로
+        video_path = video_source  # ✅ 수정: 업로드된 비디오 파일 경로
     else:
         raise RuntimeError("업로드된 동영상이나 Google Drive 링크 중 하나가 필요합니다.")
-
-    # 비디오 캡처
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise RuntimeError("비디오를 열 수 없습니다.")
+        
+        # 비디오 캡처
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise RuntimeError("비디오를 열 수 없습니다.")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
