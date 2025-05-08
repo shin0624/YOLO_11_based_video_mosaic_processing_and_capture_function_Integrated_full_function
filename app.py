@@ -13,11 +13,11 @@ import gdown
 from tqdm import tqdm
 import torch
 
-# GPU 사용 설정
+# GPU 및 환경 설정
 os.environ['YOLO_CONFIG_DIR'] = '/tmp'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-# 모델 로드
+# 모델 로드 
 model = YOLO('yolo11n.pt').to(device)
 temp_dir = tempfile.mkdtemp()
 
@@ -35,7 +35,6 @@ def process_video(
     target_resolution=70,
     compression_level=3
 ):
-    # Google Drive 다운로드
     if drive_link:
         video_path = os.path.join(temp_dir, 'input.mp4')
         gdown.download(drive_link, video_path, quiet=False)
@@ -49,7 +48,6 @@ def process_video(
     new_width = int(width * (target_resolution / 100))
     new_height = int(height * (target_resolution / 100))
 
-    # 출력 설정
     zip_path = os.path.join(temp_dir, 'output.zip')
     png_params = [cv2.IMWRITE_PNG_COMPRESSION, compression_level]
 
@@ -60,17 +58,14 @@ def process_video(
             if not ret:
                 break
 
-            # GPU 가속 모자이크 처리
             results = model(frame, device=device)
             for box in results[0].boxes.xyxy.cpu().numpy():
                 x1, y1, x2, y2 = map(int, box)
                 frame = apply_mosaic(frame, x1, y1, x2, y2)
 
-            # 해상도 조정
             if target_resolution != 100:
                 frame = cv2.resize(frame, (new_width, new_height))
 
-            # 고압축 PNG 저장
             _, buffer = cv2.imencode('.png', frame, png_params)
             zipf.writestr(f"frame_{frame_idx}.png", buffer)
 
@@ -92,7 +87,7 @@ with gr.Blocks() as demo:
     btn = gr.Button("처리 시작")
     btn.click(
         process_video,
-        inputs=[video_input, drive_link, frame_interval, target_resolution],
+        inputs=[video_input, drive_input, frame_interval, target_resolution],  # drive_input으로 수정
         outputs=output_file
     )
 
