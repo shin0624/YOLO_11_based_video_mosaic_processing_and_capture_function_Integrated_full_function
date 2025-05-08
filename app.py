@@ -13,6 +13,10 @@ import gdown
 import time
 from tqdm import tqdm
 
+# YOLO 설정 디렉토리 문제 해결
+os.environ['YOLO_CONFIG_DIR'] = '/tmp'
+
+# 모델 로드 (yolov8n.pt로 수정)
 model = YOLO('yolo11n.pt')
 temp_dir = tempfile.mkdtemp()
 
@@ -29,7 +33,8 @@ def process_video(
     frame_interval,
     max_capacity,
     max_images,
-    target_resolution
+    target_resolution,
+    progress=gr.Progress()
 ):
     # Google Drive에서 파일 다운로드
     if drive_link:
@@ -47,12 +52,8 @@ def process_video(
     current_capacity = 0
     captured_count = 0
     
-    progress_counter = 0
-    progress_interval = max(1, total_frames // 100)
-    
     with ZipFile(zip_path, 'w') as zipf:
-        frame_idx = 0
-        while cap.isOpened():
+        for frame_idx in progress.tqdm(range(total_frames), desc="프레임 처리 중"):
             ret, frame = cap.read()
             if not ret:
                 break
@@ -91,23 +92,7 @@ def process_video(
                     current_capacity += img_size
                     captured_count += 1
 
-            # 진행도 업데이트
-            if frame_idx % progress_interval == 0:
-                progress = (frame_idx / total_frames) * 100
-                yield {
-                    progress_slider: gr.update(value=progress),
-                    current_capacity_display: f"{current_capacity/(1024*1024):.2f}MB",
-                    total_capacity_display: f"{max_capacity}MB"
-                }
-            
-            frame_idx += 1
-
     cap.release()
-    yield {
-        progress_slider: gr.update(value=100),
-        current_capacity_display: f"{current_capacity/(1024*1024):.2f}MB",
-        total_capacity_display: f"{max_capacity}MB"
-    }
     return zip_path
 
 with gr.Blocks() as demo:
@@ -126,20 +111,18 @@ with gr.Blocks() as demo:
             
         with gr.Column():
             progress_slider = gr.Slider(0, 100, value=0, label="진행 상태", interactive=False)
-            current_capacity_display = gr.Textbox(label="현재 용량")
-            total_capacity_display = gr.Textbox(label="최대 용량")
+            capacity_info = gr.Textbox(label="용량 정보", value="0MB / 100MB")
             output_file = gr.File(label="다운로드 ZIP 파일")
 
     btn = gr.Button("처리 시작")
+    
+    def update_capacity(current, max_cap):
+        return f"{current/(1024*1024):.2f}MB / {max_cap}MB"
+    
     btn.click(
         process_video,
         inputs=[video_input, drive_input, frame_interval, max_capacity, max_images, target_resolution],
-        outputs=[output_file],
-        updates=[
-            progress_slider,
-            current_capacity_display,
-            total_capacity_display
-        ]
+        outputs=output_file
     )
 
 if __name__ == "__main__":
