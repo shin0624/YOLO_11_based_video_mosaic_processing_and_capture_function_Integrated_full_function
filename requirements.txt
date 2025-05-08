@@ -1,0 +1,6 @@
+gradio>=3.0
+ultralytics
+opencv-python
+gdown
+numpy
+tqdm
