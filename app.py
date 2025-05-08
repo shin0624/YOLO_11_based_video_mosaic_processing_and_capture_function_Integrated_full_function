@@ -37,9 +37,12 @@ def process_video(
 ):
     if drive_link:
         video_path = os.path.join(temp_dir, 'input.mp4')
-        gdown.download(drive_link, video_path, quiet=False)
-    else:
-        video_path = video_source
+        try:
+            file_id = drive_link.split("/d/")[1].split("/")[0]
+            direct_url = f"https://drive.google.com/uc?id={file_id}"
+            gdown.download(direct_url, video_path, quiet=False)
+        except Exception as e:
+            raise RuntimeError("Google Drive 링크 형식이 잘못되었습니다.") from e
 
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -92,9 +95,8 @@ with gr.Blocks() as demo:
     )
 
 if __name__ == "__main__":
-    demo.queue(concurrency_count=2, max_size=20).launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        enable_queue=True,
-        max_threads=4
-    )
+    demo.queue().launch(
+    server_name="0.0.0.0",
+    server_port=7860,
+    enable_queue=True
+)
