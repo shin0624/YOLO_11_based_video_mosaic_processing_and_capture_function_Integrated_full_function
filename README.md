@@ -14,6 +14,7 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 ## shin0624 내 Space 기능 모두 통합
 **YOLO 11** 모델 기반 동영상 내 사람 형상 모자이크 및 프레임 단위 이미지 캡쳐 기능 구현
 **HuggingPace Spaces**를 통해 Gradio 기반 호스팅
+**https://huggingface.co/spaces/shin0624/YOLO_11_based_video_mosaic_processing_and_capture_function_Integrated_full_function**
 
 
 ## Licenses
