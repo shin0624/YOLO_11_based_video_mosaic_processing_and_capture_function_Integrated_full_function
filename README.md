@@ -16,6 +16,7 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 **HuggingPace Spaces**를 통해 Gradio 기반 호스팅
 **https://huggingface.co/spaces/shin0624/YOLO_11_based_video_mosaic_processing_and_capture_function_Integrated_full_function**
 
+![Image](https://github.com/user-attachments/assets/94c90467-a17d-4be1-a94f-2569b7d74450)
 
 ## Licenses
 - 본 프로젝트 코드: **MIT License**
