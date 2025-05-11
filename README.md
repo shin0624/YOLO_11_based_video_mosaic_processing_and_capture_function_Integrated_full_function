@@ -78,17 +78,17 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 **1. 작업 시간 개선**
 - 현재 cv.VideoCapture로 프레임마다 .set() -> .read()하는데, 이는 매우 느림.
 - GPU 배치 처리 사용
-  BATCH_SIZE 설정을 통해 한 번에 여러 프레임 처리
-  amp.autocast()로 혼합 정밀도 연산 활성화
-  torch.backends.cudnn.benchmark로 컨볼루션 최적화
+a. BATCH_SIZE 설정을 통해 한 번에 여러 프레임 처리
+b. amp.autocast()로 혼합 정밀도 연산 활성화
+c. torch.backends.cudnn.benchmark로 컨볼루션 최적화
   
 - 파이프라인 병렬화
-  프레임 수집 -> 배치 추론 -> 후처리를 별도 스레드에서 처리
-  ThreadPoolExecutor로 CPU 집약 작업 병렬화
+a. 프레임 수집 -> 배치 추론 -> 후처리를 별도 스레드에서 처리
+b. ThreadPoolExecutor로 CPU 집약 작업 병렬화
   
 - 스트림 처리 모드
-  model.predict(stream=True)로 메모리 사용량 최적화
-  연속된 프레임 처리 시 내부 버퍼 재사용
+a. model.predict(stream=True)로 메모리 사용량 최적화
+b. 연속된 프레임 처리 시 내부 버퍼 재사용
   
 - 비동기 I/O작업
   영상 읽기 <-> 모델 추론 <-> 파일 저장 단계 오버래핑
@@ -96,24 +96,24 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 
 **2. 주요 최적화 포인트**
 - 파이프라인 병렬화 아키텍처
-  프레임 수집 → 전처리 → GPU 배치 추론 → 후처리 → 압축 단계를 오버랩 처리
-  CPU/GPU 작업 분리로 리소스 활용 극대화
+a. 프레임 수집 → 전처리 → GPU 배치 추론 → 후처리 → 압축 단계를 오버랩 처리
+b. CPU/GPU 작업 분리로 리소스 활용 극대화
 
 - 혼합 정밀도 연산(Mixed Precision)
-  autocast() 컨텍스트 매니저로 FP16 연산 활성화
-  메모리 사용량 40% 감소, 처리 속도 2배 향상 기대
+a. autocast() 컨텍스트 매니저로 FP16 연산 활성화
+b. 메모리 사용량 40% 감소, 처리 속도 2배 향상 기대
 
 - 스마트 배치 처리
-  동적 배치 크기 조정
-  한 번의 모델 호출로 다중 프레임 처리
+a. 동적 배치 크기 조정
+b. 한 번의 모델 호출로 다중 프레임 처리
 
 - 비동기 I/O 관리
-  영상 읽기와 ZIP 압축 쓰기를 별도 스레드에서 처리
-  CUDA 스트림과 Python 스레드 풀 연동
+a. 영상 읽기와 ZIP 압축 쓰기를 별도 스레드에서 처리
+b. CUDA 스트림과 Python 스레드 풀 연동
 
 - 메모리 최적화
-  프레임 데이터의 BGR/RGB 변환 최소화
-  결과 버퍼 즉시 방출(streaming) 방식 채택
+a. 프레임 데이터의 BGR/RGB 변환 최소화
+b. 결과 버퍼 즉시 방출(streaming) 방식 채택
 
 **3. 작업 결과 검증**
 - 84.5MB 크기의 1분 37초 영상 작업 시 기존 코드와 개선된 코드의 효율을 검증
@@ -160,12 +160,12 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 
 **6. YOLO모델 fuse() 호환성 문제 해결 방안**
 - fuse()완전 비활성화
-  모델 초기화 직후 model.fuse를 람다함수로 재정의
-  predict메서드 오버라이드로 이중 보안
+a. 모델 초기화 직후 model.fuse를 람다함수로 재정의
+b. predict메서드 오버라이드로 이중 보안
   
 - 최신 파이토치 AMP API 적용
-  torch.amp.autocast로 경고 해결
-  device_type과 dtype 명시적 지정
+a. torch.amp.autocast로 경고 해결
+b. device_type과 dtype 명시적 지정
   --> AttributeError : bn 오류 해결, AMP 관련 경고메시지 해결, YOLOv11n과 Ultralytics 라이브러리 호환성 문제 해결
 
 **7. 재귀 깊이 초과 오류(RecursionError) 해결**
