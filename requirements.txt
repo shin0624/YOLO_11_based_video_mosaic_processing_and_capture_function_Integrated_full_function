@@ -1,6 +1,7 @@
-gradio
-ultralytics
-opencv-python
-gdown
+gradio>=4.0.0
+ultralytics==8.3.131
+opencv-python-headless>=4.8.0
+gdown>=4.6.6
 numpy
-tqdm
+tqdm>=4.66.1
+torch>=2.0.1
