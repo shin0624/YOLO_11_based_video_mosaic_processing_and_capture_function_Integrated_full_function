@@ -16,7 +16,7 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 **HuggingPace Spaces**를 통해 Gradio 기반 호스팅
 **https://huggingface.co/spaces/shin0624/YOLO_11_based_video_mosaic_processing_and_capture_function_Integrated_full_function**
 
-![Image](https://github.com/user-attachments/assets/97815101-59bb-477f-81b7-be13ee8706fe)
+![Image](https://github.com/user-attachments/assets/86beae50-cd0b-4af9-b82a-a2f1b6e9aa75)
 
 ## Licenses
 - 본 프로젝트 코드: **MIT License**
@@ -76,49 +76,50 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 
 # 250511 개선 사항
 **1. 작업 시간 개선**
-	- 현재 cv.VideoCapture로 프레임마다 .set() -> .read()하는데, 이는 매우 느림.
-	- GPU 배치 처리 사용
-		- BATCH_SIZE 설정을 통해 한 번에 여러 프레임 처리
-		- amp.autocast()로 혼합 정밀도 연산 활성화
-		- torch.backends.cudnn.benchmark로 컨볼루션 최적화
+- 현재 cv.VideoCapture로 프레임마다 .set() -> .read()하는데, 이는 매우 느림.
+- GPU 배치 처리 사용
+  BATCH_SIZE 설정을 통해 한 번에 여러 프레임 처리
+  amp.autocast()로 혼합 정밀도 연산 활성화
+  torch.backends.cudnn.benchmark로 컨볼루션 최적화
   
-	- 파이프라인 병렬화
-		- 프레임 수집 -> 배치 추론 -> 후처리를 별도 스레드에서 처리
-		-ThreadPoolExecutor로 CPU 집약 작업 병렬화
+- 파이프라인 병렬화
+  프레임 수집 -> 배치 추론 -> 후처리를 별도 스레드에서 처리
+  ThreadPoolExecutor로 CPU 집약 작업 병렬화
   
-	- 스트림 처리 모드
-		- model.predict(stream=True)로 메모리 사용량 최적화
-		- 연속된 프레임 처리 시 내부 버퍼 재사용
+- 스트림 처리 모드
+  model.predict(stream=True)로 메모리 사용량 최적화
+  연속된 프레임 처리 시 내부 버퍼 재사용
   
-	- 비동기 I/O작업
-		- 영상 읽기 <-> 모델 추론 <-> 파일 저장 단계 오버래핑
-		- CUDA 스트림과 파이썬 스레드 조합을 사용
+- 비동기 I/O작업
+  영상 읽기 <-> 모델 추론 <-> 파일 저장 단계 오버래핑
+  CUDA 스트림과 파이썬 스레드 조합을 사용
 
 **2. 주요 최적화 포인트**
-	- 파이프라인 병렬화 아키텍처
-		- 프레임 수집 → 전처리 → GPU 배치 추론 → 후처리 → 압축 단계를 오버랩 처리
-		- CPU/GPU 작업 분리로 리소스 활용 극대화
+- 파이프라인 병렬화 아키텍처
+  프레임 수집 → 전처리 → GPU 배치 추론 → 후처리 → 압축 단계를 오버랩 처리
+  CPU/GPU 작업 분리로 리소스 활용 극대화
 
-	- 혼합 정밀도 연산(Mixed Precision)
-		- autocast() 컨텍스트 매니저로 FP16 연산 활성화
-		- 메모리 사용량 40% 감소, 처리 속도 2배 향상 기대
+- 혼합 정밀도 연산(Mixed Precision)
+  autocast() 컨텍스트 매니저로 FP16 연산 활성화
+  메모리 사용량 40% 감소, 처리 속도 2배 향상 기대
 
-	- 스마트 배치 처리
-		- 동적 배치 크기 조정
-		- 한 번의 모델 호출로 다중 프레임 처리
+- 스마트 배치 처리
+  동적 배치 크기 조정
+  한 번의 모델 호출로 다중 프레임 처리
 
-	- 비동기 I/O 관리
-		- 영상 읽기와 ZIP 압축 쓰기를 별도 스레드에서 처리
-		- CUDA 스트림과 Python 스레드 풀 연동
+- 비동기 I/O 관리
+  영상 읽기와 ZIP 압축 쓰기를 별도 스레드에서 처리
+  CUDA 스트림과 Python 스레드 풀 연동
 
-	- 메모리 최적화
-		- 프레임 데이터의 BGR/RGB 변환 최소화
-		- 결과 버퍼 즉시 방출(streaming) 방식 채택
+- 메모리 최적화
+  프레임 데이터의 BGR/RGB 변환 최소화
+  결과 버퍼 즉시 방출(streaming) 방식 채택
 
 **3. 작업 결과 검증**
 - 84.5MB 크기의 1분 37초 영상 작업 시 기존 코드와 개선된 코드의 효율을 검증
 - 디바이스 환경 : Nvidia T4 small (4vCPU, 15GB RAM, 16GB VRAM) (Huggingface Pro 요금제 구독)
 - 결과 도출 조건 : 프레임 간격 5, 해상도 100%, 동영상을 로컬에서 직접 업로드
+  
 **- 작업 결과**
   ```
 	- 프레임 수집 및 전처리 : 03분36초
@@ -126,8 +127,13 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 	- 총 작업 소요 시간 : 06분 59초
 	- 결과물 용량 : 120.4MB
   ```
+### 전처리 결과
+![Image](https://github.com/user-attachments/assets/0f747455-6cd3-4b53-bbc2-04aca87195c3)
 
-4. Gradio 인터페이스를 수정하여, 상단에 gr.Textbox를 배치.
+### 후처리 결과
+![Image](https://github.com/user-attachments/assets/28ea7d9c-b482-499b-a6d3-c2c778777e34)
+
+**4. Gradio 인터페이스를 수정하여, 상단에 gr.Textbox를 배치.**
 - html block을 사용하여 gpu는 초록색, cpu는 빨간색으로 표시하고, 아이콘 추가, 수동 새로고침도 가능하도록 구성.
 - update()와 live=True 속성을 활용하여 앱 실행 중에도 자원 사용 상태를 감지하여 인터페이스에 실시간 반영.
 
@@ -152,16 +158,17 @@ short_description: YOLO 11 모델 기반 동영상 내 사람 형상 모자이�
 		- 비디오 파일 열기 실패 시예외 발생
 		- 프레임 읽기 실패 시 자동 건너뛰기
 
-6. YOLO모델 fuse() 호환성 문제 해결 방안 
-	1. fuse()완전 비활성화
-		- 모델 초기화 직후 model.fuse를 람다함수로 재정의
-		- predict메서드 오버라이드로 이중 보안
-	2. 최신 파이토치 AMP API 적용
-		- torch.amp.autocast로 경고 해결
-		- device_type과 dtype 명시적 지정
-	--> AttributeError : bn 오류 해결, AMP 관련 경고메시지 해결, YOLOv11n과 Ultralytics 라이브러리 호환성 문제 해결
+**6. YOLO모델 fuse() 호환성 문제 해결 방안**
+- fuse()완전 비활성화
+  모델 초기화 직후 model.fuse를 람다함수로 재정의
+  predict메서드 오버라이드로 이중 보안
+  
+- 최신 파이토치 AMP API 적용
+  torch.amp.autocast로 경고 해결
+  device_type과 dtype 명시적 지정
+  --> AttributeError : bn 오류 해결, AMP 관련 경고메시지 해결, YOLOv11n과 Ultralytics 라이브러리 호환성 문제 해결
 
-7. 재귀 깊이 초과 오류(RecursionError) 해결
+**7. 재귀 깊이 초과 오류(RecursionError) 해결**
 - model.predict 오버라이드 시 원본 메서드를 참조하도록 수정
 - 람다 함수가 자기 자신을 호출하지 않도록 구조 변경
 - original_predict 변수로 원본 메서드 보존
