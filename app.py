@@ -13,104 +13,137 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import gdown
 from tqdm import tqdm
 import torch
+from concurrent.futures import ThreadPoolExecutor
+from torch.amp import autocast
 
-# GPU 및 환경 설정
-os.environ['YOLO_CONFIG_DIR'] = '/tmp'
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# fuse 메서드 핵심 패치 (모델 로드 전에 실행)
+from ultralytics.nn.tasks import BaseModel
 
-# 모델 로드
+def patched_fuse(self, verbose=False):
+    return self
+
+BaseModel.fuse = patched_fuse  # fuse 기능 완전 무력화
+
+# 병렬 처리 상수
+MAX_WORKERS = 4
+BATCH_SIZE = 8
+
+# GPU 최적화 설정
+torch.backends.cudnn.benchmark = True
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 모델 초기화 (패치 적용 후 로드)
 model = YOLO('yolo11n.pt').to(device)
+model.eval()
+
 temp_dir = tempfile.mkdtemp()
 
-def apply_mosaic(frame, x1, y1, x2, y2, mosaic_size=15):
-    roi = frame[y1:y2, x1:x2]
-    roi = cv2.resize(roi, (mosaic_size, mosaic_size))
-    roi = cv2.resize(roi, (x2 - x1, y2 - y1), interpolation=cv2.INTER_NEAREST)
-    frame[y1:y2, x1:x2] = roi
+def apply_mosaic(frame, boxes):
+    for box in boxes:
+        x1, y1, x2, y2 = map(int, box)
+        if x1 >= x2 or y1 >= y2:
+            continue
+        roi = frame[y1:y2, x1:x2]
+        roi = cv2.resize(roi, (15, 15), interpolation=cv2.INTER_NEAREST)
+        frame[y1:y2, x1:x2] = cv2.resize(roi, (x2-x1, y2-y1), interpolation=cv2.INTER_NEAREST)
     return frame
 
-def process_video(
-    video_source,
-    drive_link,
-    frame_interval=1.17,
-    target_resolution=70,
-    compression_level=3
-):
-    video_path = None
-    # Google Drive에서 다운로드
-    if drive_link:
-        video_path = os.path.join(temp_dir, 'input.mp4')
-        try:
-            file_id = drive_link.split("/d/")[1].split("/")[0]
-            direct_url = f"https://drive.google.com/uc?id={file_id}"
-            gdown.download(direct_url, video_path, quiet=False)
-        except Exception as e:
-            raise RuntimeError("Google Drive 링크 형식이 잘못되었습니다.") from e
-    # 로컬에서 업로드한 파일 사용
-    elif video_source:
-        video_path = video_source
-    else:
-        raise RuntimeError("업로드된 동영상이나 Google Drive 링크 중 하나가 필요합니다.")
+def process_batch(batch):
+    frame_indices, frames = zip(*batch)
     
-    # 영상 열기
+    with torch.no_grad(), autocast(device_type='cuda', dtype=torch.float16):
+        results = model(frames, verbose=False)
+    
+    processed = []
+    for idx, frame, result in zip(frame_indices, frames, results):
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        boxes = result.boxes.xyxy.cpu().numpy()
+        processed.append((idx, apply_mosaic(frame, boxes)))
+    return processed
+
+def process_video(video_source, drive_link, frame_interval=1.17, target_resolution=70, compression=3):
+    video_path = get_video(video_source, drive_link)
     cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise RuntimeError("비디오 파일을 열 수 없습니다.")
-    
-    # 프레임 수 얻기
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    new_width = int(width * (target_resolution / 100))
-    new_height = int(height * (target_resolution / 100))
+    
+    # 프레임 수집
+    batches = []
+    current_batch = []
+    for idx in tqdm(range(0, total_frames, int(frame_interval)), desc="Collecting Frames"):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+        ret, frame = cap.read()
+        if ret:
+            current_batch.append((idx, cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+            if len(current_batch) >= BATCH_SIZE:
+                batches.append(current_batch)
+                current_batch = []
+    if current_batch:
+        batches.append(current_batch)
 
-    zip_path = os.path.join(temp_dir, 'output.zip')
-    png_params = [cv2.IMWRITE_PNG_COMPRESSION, compression_level]
-
-    with ZipFile(zip_path, 'w', compression=ZIP_DEFLATED) as zipf:
-        for frame_idx in tqdm(range(0, total_frames, int(frame_interval)), desc="Processing"):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame = cap.read()
-            if not ret:
-                print(f"프레임 {frame_idx} 읽기 실패")
-                continue
-
-            results = model(frame, device=device)
-            for box in results[0].boxes.xyxy.cpu().numpy():
-                x1, y1, x2, y2 = map(int, box)
-                frame = apply_mosaic(frame, x1, y1, x2, y2)
-
-            if target_resolution != 100:
-                frame = cv2.resize(frame, (new_width, new_height))
-
-            _, buffer = cv2.imencode('.png', frame, png_params)
-            zipf.writestr(f"frame_{frame_idx}.png", buffer)
-
+    # 해상도 계산
+    orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    new_w = int(orig_w * target_resolution / 100)
+    new_h = int(orig_h * target_resolution / 100)
     cap.release()
+
+    # 병렬 처리
+    zip_path = os.path.join(temp_dir, 'output.zip')
+    with ZipFile(zip_path, 'w', ZIP_DEFLATED) as zipf, \
+         ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+
+        # 배치 처리 작업 생성
+        futures = [executor.submit(process_batch, batch) for batch in batches]
+        
+        for future in tqdm(futures, desc="Processing Batches"):
+            processed_frames = future.result()
+            for idx, frame in processed_frames:
+                if target_resolution != 100:
+                    frame = cv2.resize(frame, (new_w, new_h))
+                _, buffer = cv2.imencode('.png', frame, [cv2.IMWRITE_PNG_COMPRESSION, compression])
+                zipf.writestr(f"frame_{idx}.png", buffer)
+
     return zip_path
+
+def get_video(video_source, drive_link):
+    if drive_link:
+        file_id = drive_link.split("/d/")[1].split("/")[0]
+        video_path = os.path.join(temp_dir, 'input.mp4')
+        gdown.download(f"https://drive.google.com/uc?id={file_id}", video_path, quiet=False)
+        return video_path
+    return video_source
+
+def get_device_status():
+    if torch.cuda.is_available():
+        return '<span style="color:green; font-weight:bold;">✅ GPU 가속 활성화</span>'
+    return '<span style="color:red; font-weight:bold;">⚠️ CPU 모드</span>'
 
 # Gradio 인터페이스
 with gr.Blocks() as demo:
-    gr.Markdown("## 동영상 모자이크 처리 (GPU 가속)")
+    gr.Markdown("## 🚀YOLO11 기반 동영상 모자이크 처리 시스템(GPU / CPU 자동 탐지)")
+    gr.HTML(get_device_status())
 
     with gr.Row():
-        video_input = gr.Video(label="업로드 동영상")
-        drive_input = gr.Textbox(label="Google Drive 링크")
+        video_input = gr.Video(label="동영상 업로드", sources=["upload"])
+        drive_input = gr.Textbox(label="Google Drive 링크", placeholder="https://drive.google.com/...")
 
     with gr.Column():
-        frame_interval = gr.Slider(1.0, 5.0, value=1.17, step=0.01, label="프레임 간격")
-        target_resolution = gr.Slider(50, 100, value=70, label="해상도 (%)")
-        output_file = gr.File(label="결과 ZIP 파일")
+        frame_interval = gr.Slider(1, 5, 1.17, step=0.1, label="프레임 추출 간격 (초)")
+        target_resolution = gr.Slider(30, 100, 70, label="출력 해상도 (%)")
+        compression = gr.Slider(0, 9, 3, step=1, label="PNG 압축 수준")
 
-    btn = gr.Button("처리 시작")
-    btn.click(
+    output_file = gr.File(label="처리 결과")
+    start_btn = gr.Button("▶️ 처리 시작", variant="primary")
+    
+    start_btn.click(
         process_video,
-        inputs=[video_input, drive_input, frame_interval, target_resolution],
+        inputs=[video_input, drive_input, frame_interval, target_resolution, compression],
         outputs=output_file
     )
 
 if __name__ == "__main__":
     demo.queue().launch(
         server_name="0.0.0.0",
-        server_port=7860
+        server_port=7860,
+        show_api=False
     )
